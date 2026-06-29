@@ -365,6 +365,19 @@
                               <button @click="loadComments(selectedPost.id)" class="button is-small is-light ml-3">Retry</button>
                             </div>
 
+                            <!-- Pending Comment Operations Retry -->
+                            <div v-if="hasPendingCommentOps" class="notification is-warning mb-3">
+                              <div class="is-flex is-justify-content-space-between is-align-items-center">
+                                <span>
+                                  {{ commentRetryQueue.length }} comment operation(s) failed. 
+                                  <button @click="retryPendingCommentOps" :disabled="isRetrying" class="button is-small is-light ml-2">
+                                    <span v-if="!isRetrying">Retry Now</span>
+                                    <span v-else><i class="fas fa-spinner fa-spin"></i> Retrying...</span>
+                                  </button>
+                                </span>
+                              </div>
+                            </div>
+
                             <!-- No Comments -->
                             <div v-if="!commentsLoading && !commentsError && comments.length === 0" class="notification is-warning">
                               No comments yet
@@ -505,6 +518,13 @@
             isSubmitting: false,
             errors: { name: "", email: "", body: "" },
           });
+
+          const isRetrying = ref(false);
+
+          // Computed
+          const hasPendingCommentOps = computed(
+            () => commentRetryQueue.value.length > 0,
+          );
 
           // Methods
           const loadPosts = async () => {
@@ -679,7 +699,9 @@
                   postId: selectedPost.value.id,
                 },
               });
-              alert("Failed to add comment. You can retry later.");
+              alert(
+                "Failed to add comment. You can retry using the retry button.",
+              );
             } finally {
               commentForm.isSubmitting = false;
             }
@@ -702,7 +724,9 @@
                 type: "delete",
                 data: comment,
               });
-              alert("Failed to delete comment. Please retry.");
+              alert(
+                "Failed to delete comment. You can retry using the retry button.",
+              );
             } finally {
               comment.isDeleting = false;
             }
@@ -736,6 +760,51 @@
             commentFormVisible.value = false;
           };
 
+          const retryPendingCommentOps = async () => {
+            if (isRetrying.value || commentRetryQueue.value.length === 0)
+              return;
+
+            isRetrying.value = true;
+            const queue = [...commentRetryQueue.value];
+            commentRetryQueue.value = [];
+
+            let successCount = 0;
+            let failedOps = [];
+
+            for (const op of queue) {
+              try {
+                if (op.type === "add") {
+                  const newComment = await api.addComment(op.data);
+                  comments.value.push(newComment);
+                  successCount++;
+                } else if (op.type === "delete") {
+                  await api.deleteComment(op.data.id);
+                  successCount++;
+                }
+              } catch (err) {
+                failedOps.push(op);
+              }
+            }
+
+            // Put failed operations back in queue for retry
+            commentRetryQueue.value.push(...failedOps);
+            isRetrying.value = false;
+
+            if (successCount > 0 && failedOps.length === 0) {
+              alert(
+                `Successfully retried ${successCount} comment operation(s)!`,
+              );
+            } else if (successCount > 0) {
+              alert(
+                `Retried ${successCount} operation(s), but ${failedOps.length} still failed.`,
+              );
+            } else if (failedOps.length > 0) {
+              alert(
+                `Failed to retry ${failedOps.length} operation(s). Please try again.`,
+              );
+            }
+          };
+
           // Initialize
           onMounted(async () => {
             await loadCurrentUser();
@@ -754,6 +823,9 @@
             commentsLoading,
             commentsError,
             commentFormVisible,
+            commentRetryQueue,
+            hasPendingCommentOps,
+            isRetrying,
             form,
             commentForm,
             loadPosts,
@@ -769,6 +841,7 @@
             hideCommentForm,
             closeSidebar,
             loadComments,
+            retryPendingCommentOps,
           };
         },
       }).mount("#app");
