@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vue Dynamic List of Posts - Demo</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"
+    />
+    <style>
+      .Sidebar {
+        transition: transform 0.18s ease;
+      }
+      .Sidebar--open {
+        transform: translateX(0);
+      }
+      .Sidebar {
+        transform: translateX(0);
+      }
+      .hidden {
+        display: none;
+      }
+      .lds-ring {
+        display: inline-block;
+        position: relative;
+        width: 48px;
+        height: 48px;
+      }
+      .lds-ring div {
+        box-sizing: border-box;
+        display: block;
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        margin: 6px;
+        border: 4px solid #3273dc;
+        border-radius: 50%;
+        animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        border-color: #3273dc transparent transparent transparent;
+      }
+      .lds-ring div:nth-child(1) {
+        animation-delay: -0.45s;
+      }
+      .lds-ring div:nth-child(2) {
+        animation-delay: -0.3s;
+      }
+      .lds-ring div:nth-child(3) {
+        animation-delay: -0.15s;
+      }
+      @keyframes lds-ring {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .is-clickable {
+        cursor: pointer;
+      }
+      .ml-3 {
+        margin-left: 0.75rem;
+      }
+      .is-vcentered {
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="section">
+      <div class="container">
+        <!-- Header -->
+        <nav class="navbar" role="navigation" aria-label="main navigation">
+          <div class="navbar-item">
+            <h2 class="is-size-4">Vue List Of Posts (Demo)</h2>
+          </div>
+          <div class="navbar-end">
+            <div class="navbar-item">
+              <div class="buttons">
+                <div class="mr-5 mb-2">
+                  <p>User: Demo User</p>
+                </div>
+                <a class="button is-light"> Logout </a>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div class="columns mt-5">
+          <div class="column is-two-thirds">
+            <div class="tile is-parent">
+              <div class="tile is-child box is-success">
+                <div class="block">
+                  <div class="block is-flex is-justify-content-space-between">
+                    <p class="title">Posts</p>
+                    <button
+                      id="btnAddPost"
+                      type="button"
+                      class="button is-link"
+                    >
+                      Create new post
+                    </button>
+                  </div>
+
+                  <div
+                    id="postsLoader"
+                    class="is-flex is-justify-content-center is-align-items-center mt-2"
+                  >
+                    <div class="lds-ring">
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                    </div>
+                  </div>
+
+                  <div
+                    id="postsError"
+                    class="notification is-danger hidden"
+                  ></div>
+
+                  <div id="noPosts" class="notification is-warning hidden">
+                    No posts yet
+                  </div>
+
+                  <table
+                    id="postsTable"
+                    class="table is-fullwidth is-striped is-hoverable is-narrow hidden"
+                  >
+                    <thead>
+                      <tr class="has-background-link-light">
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th class="has-text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="postsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="column">
+            <div id="sidebar" class="tile is-parent is-8-desktop Sidebar">
+              <div class="tile is-child box is-success">
+                <div id="sidebarContent" class="content">
+                  <p class="title is-5">Sidebar</p>
+                  <p class="help">Open a post or create a new one.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      // Minimal UI logic to satisfy initial requirements
+      const btnAddPost = document.getElementById("btnAddPost");
+      const sidebar = document.getElementById("sidebar");
+      const sidebarContent = document.getElementById("sidebarContent");
+      const postsLoader = document.getElementById("postsLoader");
+      const postsTable = document.getElementById("postsTable");
+      const postsTbody = document.getElementById("postsTbody");
+      const postsError = document.getElementById("postsError");
+      const noPosts = document.getElementById("noPosts");
+
+      let posts = [];
+
+      function showLoader(show) {
+        postsLoader.style.display = show ? "flex" : "none";
+      }
+      function showError(msg) {
+        postsError.textContent = msg;
+        postsError.classList.remove("hidden");
+      }
+      function hideError() {
+        postsError.classList.add("hidden");
+      }
+      function showNoPosts(show) {
+        noPosts.classList.toggle("hidden", !show);
+      }
+      function showPostsTable(show) {
+        postsTable.classList.toggle("hidden", !show);
+      }
+
+      function renderPosts() {
+        postsTbody.innerHTML = "";
+        if (!posts.length) {
+          showPostsTable(false);
+          showNoPosts(true);
+          return;
+        }
+        showNoPosts(false);
+        showPostsTable(true);
+        posts.forEach((p) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>">${p.id}</td>
+            <td>${escapeHtml(p.title)}</td>
+            <td class="has-text-right is-vcentered">
+              <button data-id="${p.id}" class="button is-link btn-open">Open</button>
+            </td>`;
+          postsTbody.appendChild(tr);
+        });
+        document.querySelectorAll(".btn-open").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            const id = +e.currentTarget.dataset.id;
+            openPost(id);
+          });
+        });
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"'`]/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "",
+            })[c] || c,
+        );
+      }
+
+      function fetchPosts() {
+        showLoader(true);
+        hideError();
+        // Simulate async fetch - replace with real fetch to API if desired
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            // toggle success / empty / error for demo
+            const mode = "success"; // 'success' | 'empty' | 'error'
+            if (mode === "error")
+              return reject(new Error("Failed to load posts"));
+            if (mode === "empty") return resolve([]);
+            resolve([
+              { id: 1, title: "Hello World", body: "First post body" },
+              { id: 2, title: "Another Post", body: "More content" },
+            ]);
+          }, 900);
+        }).finally(() => showLoader(false));
+      }
+
+      function openSidebar() {
+        sidebar.classList.add("Sidebar--open");
+      }
+      function closeSidebar() {
+        sidebar.classList.remove("Sidebar--open");
+      }
+
+      function showAddPostForm() {
+        openSidebar();
+        sidebarContent.innerHTML = `
+          <h2 class="title is-5">Create Post</h2>
+          <form id="addPostForm">
+            <div class="field">
+              <label class="label">Title</label>
+              <div class="control">
+                <input id="postTitle" class="input" name="title" />
+              </div>
+              <p id="errTitle" class="help is-danger hidden">Title is required</p>
+            </div>
+            <div class="field">
+              <label class="label">Body</label>
+              <div class="control">
+                <textarea id="postBody" class="textarea" name="body"></textarea>
+              </div>
+              <p id="errBody" class="help is-danger hidden">Body is required</p>
+            </div>
+            <div class="field is-grouped">
+              <div class="control"><button id="createBtn" class="button is-link">Create</button></div>
+              <div class="control"><button id="cancelBtn" type="button" class="button is-light">Cancel</button></div>
+            </div>
+          </form>`;
+
+        const form = document.getElementById("addPostForm");
+        const title = document.getElementById("postTitle");
+        const body = document.getElementById("postBody");
+        const errTitle = document.getElementById("errTitle");
+        const errBody = document.getElementById("errBody");
+        const cancelBtn = document.getElementById("cancelBtn");
+
+        function clearErrors() {
+          errTitle.classList.add("hidden");
+          errBody.classList.add("hidden");
+        }
+        title.addEventListener("input", () => {
+          errTitle.classList.add("hidden");
+        });
+        body.addEventListener("input", () => {
+          errBody.classList.add("hidden");
+        });
+
+        cancelBtn.addEventListener("click", () => {
+          closeSidebar();
+        });
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          let valid = true;
+          if (!title.value.trim()) {
+            errTitle.classList.remove("hidden");
+            valid = false;
+          }
+          if (!body.value.trim()) {
+            errBody.classList.remove("hidden");
+            valid = false;
+          }
+          if (!valid) return;
+          // create post immediately in UI
+          const newPost = {
+            id: posts.length ? Math.max(...posts.map((p) => p.id)) + 1 : 1,
+            title: title.value.trim(),
+            body: body.value.trim(),
+          };
+          posts.unshift(newPost);
+          renderPosts();
+          // show preview in sidebar
+          showPostPreview(newPost);
+        });
+      }
+
+      function showPostPreview(post) {
+        openSidebar();
+        sidebarContent.innerHTML = `
+          <div class="block">
+            <div class="is-flex is-justify-content-space-between is-align-items-center">
+              <h2>#${post.id}: ${escapeHtml(post.title)}</h2>
+              <div class="is-flex">
+                <span class="icon is-small is-right is-clickable btn-edit" data-id="${post.id}"><i class="fas fa-pen-to-square"></i></span>
+                <span class="icon is-small is-right has-text-danger is-clickable ml-3 btn-delete" data-id="${post.id}"><i class="fas fa-trash"></i></span>
+              </div>
+            </div>
+            <p data-cy="PostBody">${escapeHtml(post.body)}</p>
+          </div>
+          <div class="block">
+            <p class="title is-6">Comments</p>
+            <div id="commentsArea"><div class="lds-ring"><div></div><div></div><div></div><div></div></div></div>
+          </div>`;
+
+        // attach handlers
+        const editBtn = sidebarContent.querySelector(".btn-edit");
+        const deleteBtn = sidebarContent.querySelector(".btn-delete");
+        const commentsArea = document.getElementById("commentsArea");
+
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", () => {
+            posts = posts.filter((p) => p.id !== post.id);
+            renderPosts();
+            closeSidebar();
+          });
+        }
+
+        if (editBtn) {
+          editBtn.addEventListener("click", () => {
+            showEditForm(post);
+          });
+        }
+
+        // load comments for this post
+        loadComments(post.id);
+      }
+
+      function showEditForm(post) {
+        openSidebar();
+        sidebarContent.innerHTML = `
+          <h2 class="title is-5">Edit Post #${post.id}</h2>
+          <form id="editPostForm">
+            <div class="field">
+              <label class="label">Title</label>
+              <div class="control">
+                <input id="editTitle" class="input" name="title" value="${escapeHtml(post.title)}" />
+              </div>
+              <p id="errEditTitle" class="help is-danger hidden">Title is required</p>
+            </div>
+            <div class="field">
+              <label class="label">Body</label>
+              <div class="control">
+                <textarea id="editBody" class="textarea" name="body">${escapeHtml(post.body)}</textarea>
+              </div>
+              <p id="errEditBody" class="help is-danger hidden">Body is required</p>
+            </div>
+            <div class="field is-grouped">
+              <div class="control"><button id="saveBtn" class="button is-link">Save</button></div>
+              <div class="control"><button id="cancelEditBtn" type="button" class="button is-light">Cancel</button></div>
+            </div>
+          </form>`;
+
+        const form = document.getElementById("editPostForm");
+        const title = document.getElementById("editTitle");
+        const body = document.getElementById("editBody");
+        const errTitle = document.getElementById("errEditTitle");
+        const errBody = document.getElementById("errEditBody");
+        const cancelBtn = document.getElementById("cancelEditBtn");
+
+        title.addEventListener("input", () => errTitle.classList.add("hidden"));
+        body.addEventListener("input", () => errBody.classList.add("hidden"));
+
+        cancelBtn.addEventListener("click", () => showPostPreview(post));
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          let valid = true;
+          if (!title.value.trim()) {
+            errTitle.classList.remove("hidden");
+            valid = false;
+          }
+          if (!body.value.trim()) {
+            errBody.classList.remove("hidden");
+            valid = false;
+          }
+          if (!valid) return;
+          // update post in UI
+          posts = posts.map((p) =>
+            p.id === post.id
+              ? { ...p, title: title.value.trim(), body: body.value.trim() }
+              : p,
+          );
+          renderPosts();
+          const updated = posts.find((p) => p.id === post.id);
+          showPostPreview(updated);
+        });
+      }
+
+      function loadComments(postId) {
+        const area = document.getElementById("commentsArea");
+        if (!area) return;
+        area.innerHTML =
+          '<div class="is-flex is-justify-content-center is-align-items-center"><div class="lds-ring"><div></div><div></div><div></div><div></div></div></div>';
+
+        // Simulate async comments fetch
+        setTimeout(() => {
+          const mode = "success";
+          if (mode === "error") {
+            area.innerHTML = `<div class="notification is-danger">Failed to load comments <button id="retryComments" class="button is-small is-light ml-3">Retry</button></div>`;
+            const retry = document.getElementById("retryComments");
+            if (retry)
+              retry.addEventListener("click", () => loadComments(postId));
+            return;
+          }
+
+          if (mode === "empty") {
+            area.innerHTML = '<p class="help">No comments yet</p>';
+            return;
+          }
+
+
+          const comments = [
+            { id: 1, name: "Alice", body: "Nice post!" },
+            { id: 2, name: "Bob", body: "Thanks for sharing" },
+          ];
+          const list = document.createElement("div");
+          comments.forEach((c) => {
+            const el = document.createElement("div");
+            el.className = "box";
+            el.innerHTML = `<p class="is-size-6"><strong>${escapeHtml(c.name)}</strong></p><p>${escapeHtml(c.body)}</p>`;
+            list.appendChild(el);
+          });
+          const writeBtn = document.createElement("button");
+          writeBtn.className = "button is-link mt-3";
+          writeBtn.textContent = "Write a comment";
+          area.innerHTML = "";
+          area.appendChild(list);
+          area.appendChild(writeBtn);
+        }, 800);
+      }
+
+      function openPost(id) {
+        const p = posts.find((x) => x.id === id);
+        if (!p) return;
+        showPostPreview(p);
+      }
+
+
+      btnAddPost.addEventListener("click", () => showAddPostForm());
+
+      fetchPosts()
+        .then((data) => {
+          posts = data;
+          renderPosts();
+        })
+        .catch((err) => {
+          showPostsTable(false);
+          showNoPosts(false);
+          showError(err.message || "Error loading posts");
+        });
+    </script>
+  </body>
+</html>
